@@ -1,0 +1,23 @@
+{
+  "name": "euroscope2mcp",
+  "version": "1.0.0",
+  "description": "Capture and parse EuroScope VATSIM traffic for MCP integration",
+  "main": "src/index.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node src/index.js",
+    "example": "node examples/basic-usage.js"
+  },
+  "keywords": [
+    "euroscope",
+    "vatsim",
+    "fsd",
+    "mcp",
+    "aviation"
+  ],
+  "author": "",
+  "license": "MIT",
+  "engines": {
+    "node": ">=14.0.0"
+  }
+}
