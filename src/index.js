@@ -25,7 +25,7 @@ async function main() {
   const errors = validateConfig(config);
   if (errors.length > 0) {
     console.error('Configuration errors:');
-    errors.forEach(err => console.error(`  - ${err}`));
+    errors.forEach(err => console.error('  - ' + err));
     process.exit(1);
   }
 
@@ -36,8 +36,8 @@ async function main() {
   const pipeline = createPipelineManager(config);
   pipeline.init();
 
-  console.log(`Registered parsers: ${pipeline.parserRegistry.list().join(', ')}`);
-  console.log(`Configured ports: ${config.capture.ports.map(p => p.port).join(', ')}\n');
+  console.log('Registered parsers: ' + pipeline.parserRegistry.list().join(', '));
+  console.log('Configured ports: ' + config.capture.ports.map(p => p.port).join(', ') + '\n');
 
   // Initialize database writer if enabled
   let dbWriter = null;
@@ -66,7 +66,7 @@ async function main() {
     try {
       webServer = createWebServer(pipeline, config);
       webServer.start();
-      console.log(`Web UI available at http://${config.outputs.web.host}:${config.outputs.web.port}\n`);
+      console.log('Web UI available at http://' + config.outputs.web.host + ':' + config.outputs.web.port + '\n');
     } catch (err) {
       console.error('Failed to start web server:', err.message);
       process.exit(1);
@@ -95,9 +95,9 @@ async function main() {
   // Log status every 30 seconds
   setInterval(() => {
     const status = pipeline.getStatus();
-    console.log(`Status: ${status.isRunning ? 'Running' : 'Stopped'} | ` +
-                `Messages: ${status.pipeline.totalMessages} | ` +
-                `Rate: ${status.pipeline.messagesPerSecond}/sec`);
+    console.log('Status: ' + (status.isRunning ? 'Running' : 'Stopped') + ' | ' +
+                'Messages: ' + status.pipeline.totalMessages + ' | ' +
+                'Rate: ' + status.pipeline.messagesPerSecond + '/sec');
   }, 30000);
 
   console.log('euroscope2mcp is ready');

@@ -125,6 +125,21 @@ select {
   font-size: 0.9rem;
 }
 
+input[type="text"] {
+  padding: 0.4rem 0.6rem;
+  background: #3c3c3c;
+  border: 1px solid #555;
+  border-radius: 4px;
+  color: #d4d4d4;
+  font-size: 0.9rem;
+  width: 150px;
+}
+
+input[type="text"]:focus {
+  outline: none;
+  border-color: #4ec9b0;
+}
+
 .radio-label,
 .checkbox-label {
   display: flex;

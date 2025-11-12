@@ -8,6 +8,7 @@ let ws = null;
 let viewMode = 'both';
 let portFilter = 'all';
 let typeFilter = 'all';
+let callsignFilter = '';
 let autoScroll = true;
 let paused = false;
 let messageCount = 0;
@@ -23,6 +24,7 @@ const elements = {
   messages: document.getElementById('messages'),
   portFilter: document.getElementById('port-filter'),
   typeFilter: document.getElementById('type-filter'),
+  callsignFilter: document.getElementById('callsign-filter'),
   autoScrollCheckbox: document.getElementById('auto-scroll'),
   pauseCheckbox: document.getElementById('pause-stream'),
   statMessages: document.getElementById('stat-messages'),
@@ -112,6 +114,35 @@ function addMessage(message) {
 
   if (typeFilter !== 'all' && message.type !== typeFilter) {
     return;
+  }
+
+  // Callsign filter (partial match, case-insensitive)
+  if (callsignFilter && callsignFilter.trim() !== '') {
+    const filterUpper = callsignFilter.trim().toUpperCase();
+    let matchFound = false;
+
+    // Check if message has parsed data with callsign
+    if (message.parsed) {
+      const parsed = message.parsed;
+
+      // Check common callsign fields
+      if (parsed.callsign && parsed.callsign.toUpperCase().includes(filterUpper)) {
+        matchFound = true;
+      } else if (parsed.from && parsed.from.toUpperCase().includes(filterUpper)) {
+        matchFound = true;
+      } else if (parsed.to && parsed.to.toUpperCase().includes(filterUpper)) {
+        matchFound = true;
+      }
+    }
+
+    // Also check raw message for callsign
+    if (!matchFound && message.raw && message.raw.toUpperCase().includes(filterUpper)) {
+      matchFound = true;
+    }
+
+    if (!matchFound) {
+      return;
+    }
   }
 
   messageCount++;
@@ -321,6 +352,10 @@ elements.portFilter.addEventListener('change', (e) => {
 
 elements.typeFilter.addEventListener('change', (e) => {
   typeFilter = e.target.value;
+});
+
+elements.callsignFilter.addEventListener('input', (e) => {
+  callsignFilter = e.target.value;
 });
 
 elements.autoScrollCheckbox.addEventListener('change', (e) => {
