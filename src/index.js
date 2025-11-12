@@ -1,122 +1,121 @@
 /**
  * index.js
- * Main entry point for euroscope2mcp
+ * Main entry point for euroscope2mcp v2.0
  */
 
-const { createTsharkCapture } = require('./capture/tshark-capture');
-const { createFsdParser } = require('./parser/fsd-parser');
+const { loadConfig, validateConfig } = require('./config/config-loader');
+const { createPipelineManager } = require('./pipeline/pipeline-manager');
+const { createWebServer } = require('./web/server');
+const { createDbWriter } = require('./outputs/db-writer');
+const { join } = require('path');
 
 /**
- * Create a complete EuroScope to MCP pipeline
- * @param {Object} options - Configuration options
- * @param {string} options.interface - Network interface (default: 'Ethernet')
- * @param {number} options.port - VATSIM port (default: 6809)
- * @param {string} options.tsharkPath - Path to tshark executable
- * @returns {Object} Pipeline controller
+ * Main application
  */
-function createEuroscopePipeline(options = {}) {
-  const capture = createTsharkCapture(options);
-  const parser = createFsdParser();
+async function main() {
+  console.log('euroscope2mcp v0.2.0');
+  console.log('==================\n');
 
-  let isRunning = false;
+  // Load configuration
+  console.log('Loading configuration...');
+  const configPath = process.argv[2]; // Optional config path from CLI
+  const config = loadConfig(configPath);
 
-  // Connect capture output to parser input
-  capture.on('data', (data) => {
-    parser.processData(data);
-  });
+  // Validate configuration
+  const errors = validateConfig(config);
+  if (errors.length > 0) {
+    console.error('Configuration errors:');
+    errors.forEach(err => console.error(`  - ${err}`));
+    process.exit(1);
+  }
 
-  // Forward parser events
-  const forwardEvents = [
-    'message',
-    'position_slow',
-    'position_fast',
-    'flight_plan',
-    'text_message',
-    'clearance',
-    'client_query',
-    'controller_position',
-    'auth_pilot'
-  ];
+  console.log('Configuration loaded successfully\n');
 
-  const eventHandlers = {};
-  forwardEvents.forEach(event => {
-    eventHandlers[event] = [];
-  });
+  // Create pipeline manager
+  console.log('Initializing pipeline...');
+  const pipeline = createPipelineManager(config);
+  pipeline.init();
 
-  /**
-   * Start the pipeline
-   */
-  function start() {
-    if (isRunning) {
-      throw new Error('Pipeline already running');
+  console.log(`Registered parsers: ${pipeline.parserRegistry.list().join(', ')}`);
+  console.log(`Configured ports: ${config.capture.ports.map(p => p.port).join(', ')}\n');
+
+  // Initialize database writer if enabled
+  let dbWriter = null;
+  if (config.outputs.database.enabled) {
+    console.log('Initializing database writer...');
+    try {
+      dbWriter = createDbWriter(config);
+      await dbWriter.init();
+
+      // Register database output
+      pipeline.registerOutput('database', async (message) => {
+        await dbWriter.write(message);
+      });
+
+      console.log('Database writer initialized\n');
+    } catch (err) {
+      console.error('Failed to initialize database:', err.message);
+      console.error('Continuing without database support\n');
+    }
+  }
+
+  // Start web server if enabled
+  let webServer = null;
+  if (config.outputs.web.enabled) {
+    console.log('Starting web server...');
+    try {
+      webServer = createWebServer(pipeline, config);
+      webServer.start();
+      console.log(`Web UI available at http://${config.outputs.web.host}:${config.outputs.web.port}\n`);
+    } catch (err) {
+      console.error('Failed to start web server:', err.message);
+      process.exit(1);
+    }
+  }
+
+  // Graceful shutdown
+  const shutdown = async () => {
+    console.log('\nShutting down...');
+
+    // Stop pipeline
+    pipeline.stop();
+
+    // Close database
+    if (dbWriter) {
+      await dbWriter.close();
     }
 
-    capture.start();
-    isRunning = true;
-  }
-
-  /**
-   * Stop the pipeline
-   */
-  function stop() {
-    if (!isRunning) {
-      return;
-    }
-
-    capture.stop();
-    isRunning = false;
-  }
-
-  /**
-   * Get pipeline status and statistics
-   */
-  function getStatus() {
-    return {
-      isRunning,
-      capture: capture.getStatus(),
-      parser: parser.getStats()
-    };
-  }
-
-  /**
-   * Register event handler
-   */
-  function on(event, handler) {
-    parser.on(event, handler);
-  }
-
-  /**
-   * Register one-time event handler
-   */
-  function once(event, handler) {
-    parser.once(event, handler);
-  }
-
-  /**
-   * Remove event handler
-   */
-  function off(event, handler) {
-    parser.off(event, handler);
-  }
-
-  // Forward capture events
-  capture.on('started', (info) => parser.emit && parser.emit('started', info));
-  capture.on('stopped', () => parser.emit && parser.emit('stopped'));
-  capture.on('error', (err) => parser.emit && parser.emit('error', err));
-
-  // Public API
-  return {
-    start,
-    stop,
-    getStatus,
-    on,
-    once,
-    off
+    console.log('Shutdown complete');
+    process.exit(0);
   };
+
+  process.on('SIGINT', shutdown);
+  process.on('SIGTERM', shutdown);
+
+  // Log status every 30 seconds
+  setInterval(() => {
+    const status = pipeline.getStatus();
+    console.log(`Status: ${status.isRunning ? 'Running' : 'Stopped'} | ` +
+                `Messages: ${status.pipeline.totalMessages} | ` +
+                `Rate: ${status.pipeline.messagesPerSecond}/sec`);
+  }, 30000);
+
+  console.log('euroscope2mcp is ready');
+  console.log('Use the web UI to start/stop capture or press Ctrl+C to exit\n');
 }
 
+// Export for programmatic use
 module.exports = {
-  createEuroscopePipeline,
-  createTsharkCapture,
-  createFsdParser
+  loadConfig,
+  createPipelineManager,
+  createWebServer,
+  createDbWriter
 };
+
+// Run if executed directly
+if (require.main === module) {
+  main().catch(err => {
+    console.error('Fatal error:', err);
+    process.exit(1);
+  });
+}

@@ -1,0 +1,53 @@
+{
+  "capture": {
+    "interface": "Ethernet",
+    "tsharkPath": "C:\\Program Files\\Wireshark\\tshark.exe",
+    "ports": [
+      {
+        "port": 6809,
+        "parser": "fsd",
+        "enabled": true,
+        "label": "VATSIM FSD"
+      }
+    ]
+  },
+
+  "parsers": {
+    "fsd": {
+      "enabled": true
+    },
+    "raw": {
+      "enabled": true
+    },
+    "example": {
+      "enabled": false
+    }
+  },
+
+  "outputs": {
+    "web": {
+      "enabled": true,
+      "port": 3000,
+      "host": "0.0.0.0"
+    },
+    "database": {
+      "enabled": false,
+      "host": "localhost",
+      "port": 5432,
+      "database": "euroscope",
+      "user": "euroscope",
+      "password": "",
+      "batchSize": 100,
+      "flushInterval": 1000
+    },
+    "file": {
+      "enabled": false,
+      "path": "./logs/capture.log"
+    }
+  },
+
+  "logging": {
+    "level": "info",
+    "file": "./logs/app.log"
+  }
+}

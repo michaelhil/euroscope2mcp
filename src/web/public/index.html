@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>euroscope2mcp - Live Monitor</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>euroscope2mcp - Live Monitor</h1>
+      <div class="connection-status">
+        <span id="status-indicator" class="status-dot disconnected"></span>
+        <span id="status-text">Disconnected</span>
+      </div>
+    </header>
+
+    <div class="controls">
+      <div class="control-group">
+        <button id="btn-start" class="btn btn-success">Start Capture</button>
+        <button id="btn-stop" class="btn btn-danger">Stop Capture</button>
+        <button id="btn-clear" class="btn btn-secondary">Clear Display</button>
+      </div>
+
+      <div class="control-group">
+        <label>View:</label>
+        <label class="radio-label">
+          <input type="radio" name="view" value="both" checked> Both
+        </label>
+        <label class="radio-label">
+          <input type="radio" name="view" value="raw"> Raw
+        </label>
+        <label class="radio-label">
+          <input type="radio" name="view" value="parsed"> Parsed
+        </label>
+      </div>
+
+      <div class="control-group">
+        <label for="port-filter">Port:</label>
+        <select id="port-filter">
+          <option value="all">All</option>
+        </select>
+
+        <label for="type-filter">Message Type:</label>
+        <select id="type-filter">
+          <option value="all">All</option>
+        </select>
+      </div>
+
+      <div class="control-group">
+        <label class="checkbox-label">
+          <input type="checkbox" id="auto-scroll" checked> Auto-scroll
+        </label>
+        <label class="checkbox-label">
+          <input type="checkbox" id="pause-stream"> Pause
+        </label>
+      </div>
+    </div>
+
+    <div class="stats-bar">
+      <div class="stat">
+        <span class="stat-label">Messages:</span>
+        <span id="stat-messages">0</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">Rate:</span>
+        <span id="stat-rate">0.0/sec</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">Active Ports:</span>
+        <span id="stat-ports">0</span>
+      </div>
+      <div class="stat">
+        <span class="stat-label">Uptime:</span>
+        <span id="stat-uptime">0s</span>
+      </div>
+    </div>
+
+    <div class="messages-container">
+      <div id="messages" class="messages"></div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

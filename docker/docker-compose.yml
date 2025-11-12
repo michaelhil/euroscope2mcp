@@ -1,0 +1,60 @@
+version: '3.8'
+
+services:
+  timescaledb:
+    image: timescale/timescaledb:latest-pg15
+    container_name: euroscope-db
+    environment:
+      POSTGRES_DB: euroscope
+      POSTGRES_USER: euroscope
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-euroscope123}
+      POSTGRES_INITDB_ARGS: "-c shared_preload_libraries=timescaledb"
+    ports:
+      - "5432:5432"
+    volumes:
+      - timescale-data:/var/lib/postgresql/data
+      - ./timescaledb/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U euroscope"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - euroscope-network
+
+  euroscope2mcp:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    container_name: euroscope-app
+    depends_on:
+      timescaledb:
+        condition: service_healthy
+    environment:
+      DB_HOST: timescaledb
+      DB_PORT: 5432
+      DB_NAME: euroscope
+      DB_USER: euroscope
+      DB_PASSWORD: ${DB_PASSWORD:-euroscope123}
+      WEB_PORT: 3000
+      NODE_ENV: production
+    ports:
+      - "3000:3000"
+    volumes:
+      - ../config:/app/config:ro
+      - ../parsers:/app/parsers:ro
+      - ../logs:/app/logs
+    network_mode: host
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    restart: unless-stopped
+
+volumes:
+  timescale-data:
+    driver: local
+
+networks:
+  euroscope-network:
+    driver: bridge
