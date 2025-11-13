@@ -173,7 +173,12 @@ function addMessage(message) {
     }
   }
 
-  messageCount++;
+  // Count sub-messages for batched messages
+  if (message.type === 'BATCHED' && message.parsed && message.parsed.subMessages) {
+    messageCount += message.parsed.subMessages.length;
+  } else {
+    messageCount++;
+  }
   elements.statMessages.textContent = messageCount;
 
   // Create message element
