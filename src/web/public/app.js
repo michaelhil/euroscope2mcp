@@ -209,7 +209,8 @@ function addMessage(message) {
       contentHTML += `<div class="submessage-header">${idx + 1}. ${subMsg.type}</div>`;
 
       if (viewMode === 'both' || viewMode === 'raw') {
-        contentHTML += `<div class="submessage-raw">${escapeHtml(subMsg.raw)}</div>`;
+        const cleanRaw = subMsg.raw.replace(/\\r\\n/g, '').replace(/\r\n/g, '');
+        contentHTML += `<div class="submessage-raw">${escapeHtml(cleanRaw)}</div>`;
       }
 
       if (subMsg.humanReadable) {
@@ -230,7 +231,8 @@ function addMessage(message) {
   } else {
     // Single message (original behavior)
     if (viewMode === 'both' || viewMode === 'raw') {
-      contentHTML += `<div class="message-raw">${escapeHtml(message.raw)}</div>`;
+      const cleanRaw = message.raw.replace(/\\r\\n/g, '').replace(/\r\n/g, '');
+      contentHTML += `<div class="message-raw">${escapeHtml(cleanRaw)}</div>`;
     }
 
     // Show human-readable if available
