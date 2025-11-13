@@ -1,6 +1,7 @@
 /**
  * db-writer.js
  * TimescaleDB writer with batching support
+ * Updated for Hybrid Schema (Option 1)
  */
 
 const { Pool } = require('pg');
@@ -31,13 +32,10 @@ function createDbWriter(config) {
   const batchSize = dbConfig.batchSize || 100;
   const flushInterval = dbConfig.flushInterval || 1000;
 
-  // Buffers for different message types
+  // Buffers for the hybrid schema (positions + messages)
   const buffers = {
-    messages: [],
     positions: [],
-    flightPlans: [],
-    textMessages: [],
-    controllerPositions: []
+    messages: []
   };
 
   let flushTimer = null;
@@ -71,22 +69,17 @@ function createDbWriter(config) {
    */
   async function write(message) {
     try {
-      // Add to general messages buffer
-      buffers.messages.push(message);
-
-      // Add to specific buffers based on type
+      // Route to appropriate buffer based on message type
       if (message.type === 'POSITION_FAST' || message.type === 'POSITION_SLOW') {
         buffers.positions.push(message);
-      } else if (message.type === 'FLIGHT_PLAN') {
-        buffers.flightPlans.push(message);
-      } else if (message.type === 'TEXT_MESSAGE') {
-        buffers.textMessages.push(message);
-      } else if (message.type === 'CONTROLLER_POSITION') {
-        buffers.controllerPositions.push(message);
+      } else {
+        // Everything else goes to messages table
+        buffers.messages.push(message);
       }
 
       // Check if we need to flush
-      if (buffers.messages.length >= batchSize) {
+      const totalBuffered = buffers.positions.length + buffers.messages.length;
+      if (totalBuffered >= batchSize) {
         await flush();
       }
     } catch (err) {
@@ -99,39 +92,28 @@ function createDbWriter(config) {
    * Flush all buffers to database
    */
   async function flush() {
+    // Quick check if there's anything to flush
+    if (buffers.positions.length === 0 && buffers.messages.length === 0) {
+      return;
+    }
+
     const client = await pool.connect();
 
     try {
       await client.query('BEGIN');
 
-      // Flush messages
-      if (buffers.messages.length > 0) {
-        await flushMessages(client, buffers.messages);
-        buffers.messages = [];
-      }
-
       // Flush positions
       if (buffers.positions.length > 0) {
         await flushPositions(client, buffers.positions);
+        stats.totalWritten += buffers.positions.length;
         buffers.positions = [];
       }
 
-      // Flush flight plans
-      if (buffers.flightPlans.length > 0) {
-        await flushFlightPlans(client, buffers.flightPlans);
-        buffers.flightPlans = [];
-      }
-
-      // Flush text messages
-      if (buffers.textMessages.length > 0) {
-        await flushTextMessages(client, buffers.textMessages);
-        buffers.textMessages = [];
-      }
-
-      // Flush controller positions
-      if (buffers.controllerPositions.length > 0) {
-        await flushControllerPositions(client, buffers.controllerPositions);
-        buffers.controllerPositions = [];
+      // Flush messages
+      if (buffers.messages.length > 0) {
+        await flushMessages(client, buffers.messages);
+        stats.totalWritten += buffers.messages.length;
+        buffers.messages = [];
       }
 
       await client.query('COMMIT');
@@ -147,46 +129,9 @@ function createDbWriter(config) {
   }
 
   /**
-   * Flush messages to messages table
-   */
-  async function flushMessages(client, messages) {
-    if (messages.length === 0) return;
-
-    const values = messages.map((msg, idx) => {
-      const params = [
-        new Date(msg.timestamp),
-        msg.port,
-        msg.type,
-        msg.parserName,
-        msg.raw,
-        JSON.stringify(msg.parsed),
-        JSON.stringify({ parserName: msg.parserName })
-      ];
-      const offset = idx * 7;
-      return `($${offset + 1}, $${offset + 2}, $${offset + 3}, $${offset + 4}, $${offset + 5}, $${offset + 6}, $${offset + 7})`;
-    }).join(',');
-
-    const allParams = messages.flatMap(msg => [
-      new Date(msg.timestamp),
-      msg.port,
-      msg.type,
-      msg.parserName,
-      msg.raw,
-      JSON.stringify(msg.parsed),
-      JSON.stringify({ parserName: msg.parserName })
-    ]);
-
-    const query = `
-      INSERT INTO messages (time, port, message_type, parser_name, raw_message, parsed_data, metadata)
-      VALUES ${values}
-    `;
-
-    await client.query(query, allParams);
-    stats.totalWritten += messages.length;
-  }
-
-  /**
    * Flush positions to positions table
+   * Schema: time, port, callsign, squawk, rating, latitude, longitude,
+   *         altitude, ground_speed, pbh, flags, message_type, raw_message
    */
   async function flushPositions(client, positions) {
     if (positions.length === 0) return;
@@ -199,135 +144,72 @@ function createDbWriter(config) {
       if (!msg.parsed) return;
 
       const p = msg.parsed;
-      values.push(`($${paramIndex}, $${paramIndex + 1}, $${paramIndex + 2}, $${paramIndex + 3}, $${paramIndex + 4}, $${paramIndex + 5}, $${paramIndex + 6}, $${paramIndex + 7}, $${paramIndex + 8}, $${paramIndex + 9})`);
+      values.push('(' + '$' + paramIndex + ', $' + (paramIndex + 1) + ', $' + (paramIndex + 2) + ', $' + (paramIndex + 3) + ', $' + (paramIndex + 4) + ', $' + (paramIndex + 5) + ', $' + (paramIndex + 6) + ', $' + (paramIndex + 7) + ', $' + (paramIndex + 8) + ', $' + (paramIndex + 9) + ', $' + (paramIndex + 10) + ', $' + (paramIndex + 11) + ', $' + (paramIndex + 12) + ')');
       params.push(
         new Date(msg.timestamp),
         msg.port,
         p.callsign || '',
-        p.latitude || 0,
-        p.longitude || 0,
-        p.altitude || 0,
-        p.groundSpeed || 0,
-        0, // heading (not in current parser)
-        p.squawk || '',
-        p.rating || 0
+        p.squawk || null,
+        p.rating || null,
+        p.latitude || null,
+        p.longitude || null,
+        p.altitude || null,
+        p.groundSpeed || null,
+        p.pbh || null,
+        p.flags ? parseInt(p.flags) : null,
+        msg.type,
+        msg.raw
       );
-      paramIndex += 10;
+      paramIndex += 13;
     });
 
     if (values.length === 0) return;
 
-    const query = `
-      INSERT INTO positions (time, port, callsign, latitude, longitude, altitude, ground_speed, heading, squawk, rating)
-      VALUES ${values.join(',')}
-    `;
+    const query = 'INSERT INTO positions (time, port, callsign, squawk, rating, latitude, longitude, altitude, ground_speed, pbh, flags, message_type, raw_message) VALUES ' + values.join(',');
 
     await client.query(query, params);
   }
 
   /**
-   * Flush flight plans to flight_plans table
+   * Flush messages to messages table
+   * Schema: time, port, message_type, callsign, data, raw_message
    */
-  async function flushFlightPlans(client, flightPlans) {
-    if (flightPlans.length === 0) return;
+  async function flushMessages(client, messages) {
+    if (messages.length === 0) return;
 
     const values = [];
     const params = [];
     let paramIndex = 1;
 
-    flightPlans.forEach(msg => {
-      if (!msg.parsed) return;
+    messages.forEach(msg => {
+      // Extract callsign from parsed data (different fields for different message types)
+      let callsign = null;
+      if (msg.parsed) {
+        if (msg.parsed.callsign) {
+          callsign = msg.parsed.callsign;
+        } else if (msg.parsed.from) {
+          callsign = msg.parsed.from;
+        }
+      }
 
-      values.push(`($${paramIndex}, $${paramIndex + 1}, $${paramIndex + 2}, $${paramIndex + 3}, $${paramIndex + 4})`);
+      // Store all parsed data as JSONB
+      const data = msg.parsed || {};
+
+      values.push('(' + '$' + paramIndex + ', $' + (paramIndex + 1) + ', $' + (paramIndex + 2) + ', $' + (paramIndex + 3) + ', $' + (paramIndex + 4) + ', $' + (paramIndex + 5) + ')');
       params.push(
         new Date(msg.timestamp),
         msg.port,
-        msg.parsed.callsign || '',
-        msg.parsed.data || '',
-        JSON.stringify(msg.parsed)
+        msg.type,
+        callsign,
+        JSON.stringify(data),
+        msg.raw
       );
-      paramIndex += 5;
+      paramIndex += 6;
     });
 
     if (values.length === 0) return;
 
-    const query = `
-      INSERT INTO flight_plans (time, port, callsign, flight_plan_data, parsed_data)
-      VALUES ${values.join(',')}
-    `;
-
-    await client.query(query, params);
-  }
-
-  /**
-   * Flush text messages to text_messages table
-   */
-  async function flushTextMessages(client, textMessages) {
-    if (textMessages.length === 0) return;
-
-    const values = [];
-    const params = [];
-    let paramIndex = 1;
-
-    textMessages.forEach(msg => {
-      if (!msg.parsed) return;
-
-      values.push(`($${paramIndex}, $${paramIndex + 1}, $${paramIndex + 2}, $${paramIndex + 3}, $${paramIndex + 4})`);
-      params.push(
-        new Date(msg.timestamp),
-        msg.port,
-        msg.parsed.from || '',
-        msg.parsed.to || '',
-        msg.parsed.message || ''
-      );
-      paramIndex += 5;
-    });
-
-    if (values.length === 0) return;
-
-    const query = `
-      INSERT INTO text_messages (time, port, from_callsign, to_callsign, message_text)
-      VALUES ${values.join(',')}
-    `;
-
-    await client.query(query, params);
-  }
-
-  /**
-   * Flush controller positions to controller_positions table
-   */
-  async function flushControllerPositions(client, controllers) {
-    if (controllers.length === 0) return;
-
-    const values = [];
-    const params = [];
-    let paramIndex = 1;
-
-    controllers.forEach(msg => {
-      if (!msg.parsed) return;
-
-      const p = msg.parsed;
-      values.push(`($${paramIndex}, $${paramIndex + 1}, $${paramIndex + 2}, $${paramIndex + 3}, $${paramIndex + 4}, $${paramIndex + 5}, $${paramIndex + 6}, $${paramIndex + 7}, $${paramIndex + 8})`);
-      params.push(
-        new Date(msg.timestamp),
-        msg.port,
-        p.callsign || '',
-        p.frequency || '',
-        p.facility || 0,
-        p.visualRange || 0,
-        p.rating || 0,
-        p.latitude || 0,
-        p.longitude || 0
-      );
-      paramIndex += 9;
-    });
-
-    if (values.length === 0) return;
-
-    const query = `
-      INSERT INTO controller_positions (time, port, callsign, frequency, facility, visual_range, rating, latitude, longitude)
-      VALUES ${values.join(',')}
-    `;
+    const query = 'INSERT INTO messages (time, port, message_type, callsign, data, raw_message) VALUES ' + values.join(',');
 
     await client.query(query, params);
   }
@@ -377,11 +259,8 @@ function createDbWriter(config) {
   function getStats() {
     return {
       ...stats,
-      bufferedMessages: buffers.messages.length,
       bufferedPositions: buffers.positions.length,
-      bufferedFlightPlans: buffers.flightPlans.length,
-      bufferedTextMessages: buffers.textMessages.length,
-      bufferedControllerPositions: buffers.controllerPositions.length
+      bufferedMessages: buffers.messages.length
     };
   }
 

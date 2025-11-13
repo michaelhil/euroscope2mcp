@@ -31,12 +31,12 @@
       "host": "0.0.0.0"
     },
     "database": {
-      "enabled": false,
+      "enabled": true,
       "host": "localhost",
       "port": 5432,
       "database": "euroscope",
       "user": "euroscope",
-      "password": "",
+      "password": "euroscope123",
       "batchSize": 100,
       "flushInterval": 1000
     },
