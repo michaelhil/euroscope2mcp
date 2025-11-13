@@ -206,6 +206,12 @@ function addMessage(message) {
 
   // Check if this is a batched message
   if (message.type === 'BATCHED' && message.parsed && message.parsed.subMessages) {
+    // Show original raw message if in raw or both mode
+    if (viewMode === 'both' || viewMode === 'raw') {
+      const cleanRaw = message.raw.replace(/\\r\\n/g, '\n').replace(/\r\n/g, '\n');
+      contentHTML += `<div class="message-raw">${escapeHtml(cleanRaw)}</div>`;
+    }
+
     contentHTML += `<div class="message-batched-summary">📦 ${message.parsed.count} sub-messages</div>`;
     contentHTML += `<div class="message-submessages">`;
 
