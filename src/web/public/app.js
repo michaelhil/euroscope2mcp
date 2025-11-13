@@ -9,6 +9,7 @@ let viewMode = 'both';
 let portFilter = 'all';
 let typeFilter = 'all';
 let callsignFilter = '';
+let entityFilter = 'all';
 let autoScroll = true;
 let paused = false;
 let messageCount = 0;
@@ -25,6 +26,7 @@ const elements = {
   portFilter: document.getElementById('port-filter'),
   typeFilter: document.getElementById('type-filter'),
   callsignFilter: document.getElementById('callsign-filter'),
+  entityFilter: document.getElementById('entity-filter'),
   autoScrollCheckbox: document.getElementById('auto-scroll'),
   pauseCheckbox: document.getElementById('pause-stream'),
   statMessages: document.getElementById('stat-messages'),
@@ -142,6 +144,32 @@ function addMessage(message) {
 
     if (!matchFound) {
       return;
+    }
+  }
+
+  // Entity filter (aircraft vs controllers)
+  if (entityFilter !== 'all') {
+    let callsignToCheck = null;
+
+    // Extract callsign from parsed data
+    if (message.parsed) {
+      const parsed = message.parsed;
+      if (parsed.callsign) {
+        callsignToCheck = parsed.callsign;
+      } else if (parsed.from) {
+        callsignToCheck = parsed.from;
+      }
+    }
+
+    if (callsignToCheck) {
+      const isController = callsignToCheck.includes('_');
+
+      if (entityFilter === 'aircraft' && isController) {
+        return;
+      }
+      if (entityFilter === 'controllers' && !isController) {
+        return;
+      }
     }
   }
 
@@ -356,6 +384,10 @@ elements.typeFilter.addEventListener('change', (e) => {
 
 elements.callsignFilter.addEventListener('input', (e) => {
   callsignFilter = e.target.value;
+});
+
+elements.entityFilter.addEventListener('change', (e) => {
+  entityFilter = e.target.value;
 });
 
 elements.autoScrollCheckbox.addEventListener('change', (e) => {
