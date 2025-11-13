@@ -604,20 +604,9 @@ bun run example:multiport
 - **Documentation**: See [docs](./docs) directory
 - **Examples**: See [examples](./examples) directory
 
-## 🙏 Acknowledgments
-
-- **VATSIM** for the FSD protocol
-- **EuroScope** for ATC client
-- **TimescaleDB** for time-series database
-- **Bun** for fast JavaScript runtime
-
 ## 📚 Additional Documentation
 
 - [Architecture](ARCHITECTURE.md) - Detailed architecture documentation
 - [Parser Development Guide](parsers/README.md) - How to write custom parsers
 - [API Documentation](docs/API.md) - Complete API reference (coming soon)
 - [Database Schema](docker/timescaledb/init.sql) - TimescaleDB schema
-
----
-
-**Made with ❤️ for the VATSIM community**
