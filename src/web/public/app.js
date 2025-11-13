@@ -199,15 +199,50 @@ function addMessage(message) {
 
   let contentHTML = '';
 
-  // Raw message
-  if (viewMode === 'both' || viewMode === 'raw') {
-    contentHTML += `<div class="message-raw">${escapeHtml(message.raw)}</div>`;
-  }
+  // Check if this is a batched message
+  if (message.type === 'BATCHED' && message.parsed && message.parsed.subMessages) {
+    contentHTML += `<div class="message-batched-summary">📦 ${message.parsed.count} sub-messages</div>`;
+    contentHTML += `<div class="message-submessages">`;
 
-  // Parsed message
-  if ((viewMode === 'both' || viewMode === 'parsed') && message.parsed) {
-    const parsedStr = JSON.stringify(message.parsed, null, 2);
-    contentHTML += `<div class="message-parsed">${escapeHtml(parsedStr)}</div>`;
+    message.parsed.subMessages.forEach((subMsg, idx) => {
+      contentHTML += `<div class="submessage">`;
+      contentHTML += `<div class="submessage-header">${idx + 1}. ${subMsg.type}</div>`;
+
+      if (viewMode === 'both' || viewMode === 'raw') {
+        contentHTML += `<div class="submessage-raw">${escapeHtml(subMsg.raw)}</div>`;
+      }
+
+      if (subMsg.humanReadable) {
+        contentHTML += `<div class="submessage-readable">💬 ${escapeHtml(subMsg.humanReadable)}</div>`;
+      }
+
+      if (viewMode === 'parsed' || viewMode === 'both') {
+        if (subMsg.parsed) {
+          const subParsedStr = JSON.stringify(subMsg.parsed, null, 2);
+          contentHTML += `<div class="submessage-parsed">${escapeHtml(subParsedStr)}</div>`;
+        }
+      }
+
+      contentHTML += `</div>`;
+    });
+
+    contentHTML += `</div>`;
+  } else {
+    // Single message (original behavior)
+    if (viewMode === 'both' || viewMode === 'raw') {
+      contentHTML += `<div class="message-raw">${escapeHtml(message.raw)}</div>`;
+    }
+
+    // Show human-readable if available
+    if (message.humanReadable) {
+      contentHTML += `<div class="message-readable">💬 ${escapeHtml(message.humanReadable)}</div>`;
+    }
+
+    // Parsed message
+    if ((viewMode === 'both' || viewMode === 'parsed') && message.parsed) {
+      const parsedStr = JSON.stringify(message.parsed, null, 2);
+      contentHTML += `<div class="message-parsed">${escapeHtml(parsedStr)}</div>`;
+    }
   }
 
   messageEl.innerHTML = headerHTML + contentHTML;
